@@ -39,23 +39,19 @@ jobs:
       - name: Install dependencies
         run: |
           choco install -y windows-sdk-10.0 strawberryperl nasm llvm
+          # 仅安装Intel Media SDK（跳过NVIDIA）
           choco install -y intel-media-sdk
-          choco install -y nvidia-video-codec-sdk --version 12.1.14
-          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\Media SDK" >> $env:GITHUB_ENV
-          echo "NVCODEC_ROOT=C:\Program Files\NVIDIA Corporation\Video Codec SDK" >> $env:GITHUB_ENV
-
-      - name: Build RustDesk Client
-        run: |
-          cd src
-          cargo build --release --features "hwcodec" --config "build.rustflags = [\"-C\", \"target-cpu=native\"]"
-        env:
-          RUST_BACKTRACE: full
+          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\Media SDK" >> $env:GITHUB_ENV    
+          # 禁用NVIDIA硬件加速（临时方案）
+          echo "HWCODEC_USE_NVIDIA=0" >> $env:GITHUB_ENV      
 
       # 5. 构建客户端（修正feature）
       - name: Build RustDesk Client
         run: |
           cd src
-          cargo build --release --features "hwcodec"  # 使用官方推荐feature
+          cargo build --release --features "hwcodec" --no-default-features
+        env:
+          HWCODEC_USE_NVIDIA: 0
 
       # 6. 构建服务器（路径修正）
       - name: Build RustDesk Server
