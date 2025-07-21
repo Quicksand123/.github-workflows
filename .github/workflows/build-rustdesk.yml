@@ -15,13 +15,22 @@ jobs:
     steps:
       - name: Setup VCPKG
         run: |
-          git clone https://github.com/microsoft/vcpkg
+          # 安装VCPKG
           git clone https://github.com/microsoft/vcpkg
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          ./vcpkg/vcpkg install ffmpeg:x64-windows-static opus:x64-windows-static
+          
+          # 强制重新安装libvpx（解决缓存问题）
+          ./vcpkg/vcpkg remove libvpx --recurse
+          ./vcpkg/vcpkg install libvpx:x64-windows-static --recurse --overlay-ports=$env:GITHUB_WORKSPACE/vcpkg/ports/libvpx
+          
+          # 验证安装
+          ls "$env:GITHUB_WORKSPACE/vcpkg/installed/x64-windows-static/include/vpx/vp8.h"
+          ls "$env:GITHUB_WORKSPACE/vcpkg/installed/x64-windows-static/lib/vpxmd.lib"
+          
+          # 设置环境变量
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
-          echo "INCLUDE=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\include;$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\include\libavcodec" >> $env:GITHUB_ENV
-          echo "LIB=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
+          echo "INCLUDE=$env:VCPKG_ROOT\installed\x64-windows-static\include;$env:VCPKG_ROOT\installed\x64-windows-static\include\vpx" >> $env:GITHUB_ENV
+          echo "LIB=$env:VCPKG_ROOT\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -70,8 +79,9 @@ jobs:
           VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
           INCLUDE: ${{ env.INCLUDE }}
           LIB: ${{ env.LIB }}
-          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=/LIBPATH:$env:VCPKG_ROOT/installed/x64-windows-static/lib"
+          RUSTFLAGS: "-C link-arg=/LIBPATH:$env:VCPKG_ROOT/installed/x64-windows-static/lib"
           RUST_BACKTRACE: full
+          CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: true
 
 
       # 5. 构建服务器
