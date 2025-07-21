@@ -19,6 +19,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          path: rustdesk
+          
+      - name: Debug structure
+        run: ls -R rustdesk  # 验证目录结构
+
+      - name: Build 
+        run: |
+             cd rustdesk
+             cargo build --release
       
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
