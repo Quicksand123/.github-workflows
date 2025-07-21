@@ -13,6 +13,13 @@ jobs:
     runs-on: windows-latest
     
     steps:
+      - name: Setup VCPKG
+        run: |
+          git clone https://github.com/microsoft/vcpkg
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
+          echo "$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_PATH
+    
       # 1. 检查代码
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,7 +56,10 @@ jobs:
       - name: Build RustDesk Client
         run: |
           cd src
-          cargo build --release --no-default-features
+          cargo build --release --features "hwcodec,vcpkg"
+        env:
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+          RUST_BACKTRACE: full
 
       # 5. 构建服务器
       - name: Build RustDesk Server
