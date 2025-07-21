@@ -15,86 +15,83 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      # 1. 拉取官方源码（关键修改）
-      ◦ name: Checkout code
-
+      # 1. 拉取官方源码
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           repository: rustdesk/rustdesk
-          path: src  # 统一使用src目录
+          path: src
           submodules: recursive
+          fetch-depth: 0  # 获取完整提交历史
 
-      # 2. 验证目录结构（调试用）
-      ◦ name: Debug structure
-
-        run: ls -R src  # 确认存在src/hbbs和src/hbbr
-
-      # 3. 设置Rust环境
-      ◦ name: Setup Rust
-
+      # 2. 设置Rust环境（必须先于依赖安装）
+      - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: x86_64-pc-windows-msvc
           override: true
+          components: rust-src, llvm-tools-preview
 
-      # 4. 安装依赖
-      ◦ name: Install dependencies
-
+      # 3. 安装基础依赖（跳过不可靠的Intel包）
+      - name: Install dependencies
         run: |
-          choco install -y windows-sdk-10.0 strawberryperl nasm llvm
-          # Intel替代方案
-          choco install -y intel-oneapi-basekit --version 2024.1.0
-          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\oneAPI\mediasdk\latest" >> $env:GITHUB_ENV    
+          choco install -y windows-sdk-10.0
+          choco install -y strawberryperl
+          choco install -y nasm
+          choco install -y llvm
+          refreshenv
 
-      # 5. 构建客户端（修正feature）
-      ◦ name: Build RustDesk Client
-
+      # 4. 构建客户端（使用当前稳定功能）
+      - name: Build RustDesk Client
         run: |
           cd src
           cargo build --release --features "hwcodec"
         env:
           RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: 0
 
-      # 6. 构建服务器（路径修正）
-      ◦ name: Build RustDesk Server
-
+      # 5. 构建服务器
+      - name: Build RustDesk Server
         run: |
-          cd src/hbbs  # 修正路径
+          cd src/hbbs
           cargo build --release
           cd ../hbbr
           cargo build --release
 
-      # 7. 打包产物（路径修正）
-      ◦ name: Prepare artifacts
-
+      # 6. 打包产物
+      - name: Prepare artifacts
         run: |
           mkdir release
           cp src/target/release/rustdesk.exe release/
           cp src/hbbs/target/release/hbbs.exe release/
           cp src/hbbr/target/release/hbbr.exe release/
-          echo "Version: ${{ github.ref_name }}" > release/version.txt
-          date >> release/version.txt
+          Get-Date -Format "yyyy-MM-dd HH:mm:ss" | Out-File -FilePath release/build_time.txt -Encoding utf8
 
-      # 后续步骤保持不变...
-      ◦ name: Upload artifacts
-
+      # 7. 上传产物
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rustdesk-windows-${{ github.sha }}
           path: release/*
-      
-      ◦ name: Upload to GitHub Release
+          retention-days: 5
 
+      # 8. 发布到GitHub Release（仅tag触发时）
+      - name: Upload to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: release/*
+          files: |
+            release/rustdesk.exe
+            release/hbbs.exe
+            release/hbbr.exe
           tag_name: ${{ github.ref_name }}
           name: RustDesk ${{ github.ref_name }}
           body: |
-            RustDesk Windows 版本 ${{ github.ref_name }}
-            包含客户端和服务器组件
+            Windows 版本构建于 ${{ steps.prepare.outputs.build_time }}
+            - 客户端: rustdesk.exe
+            - 信令服务器: hbbs.exe  
+            - 中继服务器: hbbr.exe
           draft: false
           prerelease: false
         env:
