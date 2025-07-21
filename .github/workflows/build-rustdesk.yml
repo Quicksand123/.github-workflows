@@ -39,19 +39,17 @@ jobs:
       - name: Install dependencies
         run: |
           choco install -y windows-sdk-10.0 strawberryperl nasm llvm
-          # 仅安装Intel Media SDK（跳过NVIDIA）
-          choco install -y intel-media-sdk
-          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\Media SDK" >> $env:GITHUB_ENV    
-          # 禁用NVIDIA硬件加速（临时方案）
-          echo "HWCODEC_USE_NVIDIA=0" >> $env:GITHUB_ENV      
+          # Intel替代方案
+          choco install -y intel-oneapi-basekit --version 2024.1.0
+          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\oneAPI\mediasdk\latest" >> $env:GITHUB_ENV    
 
       # 5. 构建客户端（修正feature）
       - name: Build RustDesk Client
         run: |
           cd src
-          cargo build --release --features "hwcodec" --no-default-features
+          cargo build --release --features "hwcodec"
         env:
-          HWCODEC_USE_NVIDIA: 0
+          RUST_BACKTRACE: full
 
       # 6. 构建服务器（路径修正）
       - name: Build RustDesk Server
