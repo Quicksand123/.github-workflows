@@ -39,6 +39,17 @@ jobs:
       - name: Install dependencies
         run: |
           choco install -y windows-sdk-10.0 strawberryperl nasm llvm
+          choco install -y intel-media-sdk
+          choco install -y nvidia-video-codec-sdk --version 12.1.14
+          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\Media SDK" >> $env:GITHUB_ENV
+          echo "NVCODEC_ROOT=C:\Program Files\NVIDIA Corporation\Video Codec SDK" >> $env:GITHUB_ENV
+
+      - name: Build RustDesk Client
+        run: |
+          cd src
+          cargo build --release --features "hwcodec" --config "build.rustflags = [\"-C\", \"target-cpu=native\"]"
+        env:
+          RUST_BACKTRACE: full
 
       # 5. 构建客户端（修正feature）
       - name: Build RustDesk Client
