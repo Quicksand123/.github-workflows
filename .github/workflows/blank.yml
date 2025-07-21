@@ -1,0 +1,119 @@
+name: Build RustDesk for Windows
+
+on:
+  # 手动触发工作流
+  workflow_dispatch:
+  # 或在推送到 main 分支时触发
+  push:
+    branches: [ main ]
+  # 或在创建 release 时触发
+  release:
+    types: [ created ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      # 2. 设置 Rust 环境
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+          override: true
+      
+      # 3. 缓存依赖
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      # 4. 安装 Windows 构建依赖
+      - name: Install Windows SDK and dependencies
+        run: |
+          choco install windows-sdk-10.0 -y
+          choco install strawberryperl -y
+          choco install nasm -y
+          choco install llvm -y
+      
+      # 5. 编译客户端
+      - name: Build RustDesk Client
+        run: |
+          cd rustdesk
+          cargo build --release --features "clipboard,system_tray,dbus,media,software_renderer"
+      
+      # 6. 编译服务器组件
+      - name: Build RustDesk Server
+        run: |
+          cd hbbs
+          cargo build --release
+          
+          cd ../hbbr
+          cargo build --release
+      
+      # 7. 运行测试（如果有）
+      - name: Run tests
+        run: |
+          cd rustdesk
+          cargo test --release
+      
+      # 8. 创建安装包
+      - name: Create installer
+        run: |
+          cd rustdesk
+          cargo install cargo-wix
+          cargo wix --nocapture
+      
+      # 9. 准备发布文件
+      - name: Prepare artifacts
+        run: |
+          mkdir release
+          
+          # 复制客户端
+          cp rustdesk/target/release/rustdesk.exe release/
+          cp rustdesk/target/release/installer/*.msi release/
+          
+          # 复制服务器组件
+          cp hbbs/target/release/hbbs.exe release/
+          cp hbbr/target/release/hbbr.exe release/
+          
+          # 创建版本信息文件
+          echo "Version: ${{ github.ref_name }}" > release/version.txt
+          echo "Build Date: $(date)" >> release/version.txt
+      
+      # 10. 上传构建产物
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: rustdesk-windows-${{ github.sha }}
+          path: release/*
+      
+      # 11. 发布到 GitHub Release（如果是 release 触发）
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          tag_name: ${{ github.ref_name }}
+          name: RustDesk ${{ github.ref_name }}
+          body: |
+            RustDesk Windows 版本 ${{ github.ref_name }}
+            包含客户端和服务器组件
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
