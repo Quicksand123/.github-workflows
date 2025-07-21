@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-  release:
-    types: [ created ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,16 +13,15 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      # 1. 拉取官方源码
+      # 1. 检查代码
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           repository: rustdesk/rustdesk
           path: src
           submodules: recursive
-          fetch-depth: 0  # 获取完整提交历史
 
-      # 2. 设置Rust环境（必须先于依赖安装）
+      # 2. 设置Rust环境
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -33,23 +30,26 @@ jobs:
           override: true
           components: rust-src, llvm-tools-preview
 
-      # 3. 安装基础依赖（跳过不可靠的Intel包）
+      # 3. 改进的依赖安装
       - name: Install dependencies
         run: |
-          choco install -y windows-sdk-10.0
-          choco install -y strawberryperl
-          choco install -y nasm
-          choco install -y llvm
+          # 强制重新安装llvm并刷新环境
+          choco uninstall -y llvm
+          choco install -y llvm --force
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
           refreshenv
 
-      # 4. 构建客户端（使用当前稳定功能）
+          # 其他依赖
+          choco install -y windows-sdk-10.0 strawberryperl nasm
+          Write-Host "::group::Environment Variables"
+          Get-ChildItem Env:
+          Write-Host "::endgroup::"
+
+      # 4. 构建客户端（跳过硬件加速）
       - name: Build RustDesk Client
         run: |
           cd src
-          cargo build --release --features "hwcodec"
-        env:
-          RUST_BACKTRACE: full
-          CARGO_INCREMENTAL: 0
+          cargo build --release --no-default-features
 
       # 5. 构建服务器
       - name: Build RustDesk Server
