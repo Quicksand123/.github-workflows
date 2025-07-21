@@ -15,51 +15,51 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      - name: Checkout code
+      # 1. 拉取官方源码（关键修改）
+      - name: Checkout RustDesk official repo
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          path: rustdesk
-          
-      - name: Debug structure
-        run: ls -R rustdesk  # 验证目录结构
+          repository: rustdesk/rustdesk  # 指定官方仓库
+          path: rustdesk  # 检出到rustdesk目录
+          submodules: recursive  # 必须递归检出子模块
 
-      - name: Build 
-        run: |
-             cd rustdesk
-             cargo build --release
-      
+      # 2. 调试目录结构（验证用）
+      - name: Debug directory structure
+        run: ls -R rustdesk
+
+      # 3. 设置Rust环境（必须在检出代码之后）
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: x86_64-pc-windows-msvc
           override: true
-      
+
+      # 4. 后续步骤保持不变（路径已统一为rustdesk/）
       - name: Cache cargo registry
-        uses: actions/cache@v4  # 已升级
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rustdesk/Cargo.lock') }}
+
       - name: Install Windows SDK and dependencies
         run: |
           choco install windows-sdk-10.0 -y
           choco install strawberryperl -y
           choco install nasm -y
           choco install llvm -y
-      
+
       - name: Build RustDesk Client
         run: |
           cd rustdesk
           cargo build --release --features "clipboard,system_tray,dbus,media,software_renderer"
-      
+
       - name: Build RustDesk Server
         run: |
-          cd hbbs
+          cd rustdesk/hbbs
           cargo build --release
           cd ../hbbr
           cargo build --release
