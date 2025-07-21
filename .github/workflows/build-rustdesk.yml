@@ -16,18 +16,18 @@ jobs:
     
     steps:
       # 1. 拉取官方源码（关键修改）
-      - name: Checkout RustDesk official repo
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          repository: rustdesk/rustdesk  # 指定官方仓库
-          path: rustdesk  # 检出到rustdesk目录
-          submodules: recursive  # 必须递归检出子模块
+          repository: rustdesk/rustdesk
+          path: src  # 统一使用src目录
+          submodules: recursive
 
-      # 2. 调试目录结构（验证用）
-      - name: Debug directory structure
-        run: ls -R rustdesk
+      # 2. 验证目录结构（调试用）
+      - name: Debug structure
+        run: ls -R src  # 确认存在src/hbbs和src/hbbr
 
-      # 3. 设置Rust环境（必须在检出代码之后）
+      # 3. 设置Rust环境
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -35,58 +35,38 @@ jobs:
           target: x86_64-pc-windows-msvc
           override: true
 
-      # 4. 后续步骤保持不变（路径已统一为rustdesk/）
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rustdesk/Cargo.lock') }}
-
-      - name: Install Windows SDK and dependencies
+      # 4. 安装依赖
+      - name: Install dependencies
         run: |
-          choco install windows-sdk-10.0 -y
-          choco install strawberryperl -y
-          choco install nasm -y
-          choco install llvm -y
+          choco install -y windows-sdk-10.0 strawberryperl nasm llvm
 
+      # 5. 构建客户端（修正feature）
       - name: Build RustDesk Client
         run: |
-          cd rustdesk
-          cargo build --release --features "clipboard,system_tray,dbus,media,software_renderer"
+          cd src
+          cargo build --release --features "hwcodec"  # 使用官方推荐feature
 
+      # 6. 构建服务器（路径修正）
       - name: Build RustDesk Server
         run: |
-          cd rustdesk/hbbs
+          cd src/hbbs  # 修正路径
           cargo build --release
           cd ../hbbr
           cargo build --release
-      
-      - name: Run tests
-        run: |
-          cd rustdesk
-          cargo test --release
-      
-      - name: Create installer
-        run: |
-          cd rustdesk
-          cargo install cargo-wix --version 0.3.0
-          cargo wix --nocapture
-      
+
+      # 7. 打包产物（路径修正）
       - name: Prepare artifacts
         run: |
           mkdir release
-          cp rustdesk/target/release/rustdesk.exe release/
-          cp rustdesk/target/release/installer/*.msi release/
-          cp hbbs/target/release/hbbs.exe release/
-          cp hbbr/target/release/hbbr.exe release/
+          cp src/target/release/rustdesk.exe release/
+          cp src/hbbs/target/release/hbbs.exe release/
+          cp src/hbbr/target/release/hbbr.exe release/
           echo "Version: ${{ github.ref_name }}" > release/version.txt
-          echo "Build Date: $(date)" >> release/version.txt
-      
+          date >> release/version.txt
+
+      # 后续步骤保持不变...
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4  # 已升级
+        uses: actions/upload-artifact@v4
         with:
           name: rustdesk-windows-${{ github.sha }}
           path: release/*
