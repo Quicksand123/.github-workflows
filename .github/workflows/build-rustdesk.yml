@@ -15,19 +15,15 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      # 1. 拉取官方源码（关键修改）
+      # 1. 拉取源码（使用官方仓库）
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           repository: rustdesk/rustdesk
-          path: src  # 统一使用src目录
+          path: src
           submodules: recursive
 
-      # 2. 验证目录结构（调试用）
-      - name: Debug structure
-        run: ls -R src  # 确认存在src/hbbs和src/hbbr
-
-      # 3. 设置Rust环境
+      # 2. 设置Rust环境（必须先于依赖安装）
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -35,31 +31,29 @@ jobs:
           target: x86_64-pc-windows-msvc
           override: true
 
-      # 4. 安装依赖
+      # 3. 仅安装基础依赖（跳过不可用的Intel/NVIDIA包）
       - name: Install dependencies
         run: |
-          choco install -y windows-sdk-10.0 strawberryperl nasm llvm
-          # Intel替代方案
-          choco install -y intel-oneapi-basekit --version 2024.1.0
-          echo "INTEL_MEDIA_SDK_ROOT=C:\Program Files (x86)\Intel\oneAPI\mediasdk\latest" >> $env:GITHUB_ENV    
+          choco install -y windows-sdk-10.0
+          choco install -y strawberryperl
+          choco install -y nasm
+          choco install -y llvm
 
-      # 5. 构建客户端（修正feature）
+      # 4. 构建客户端（使用软件渲染）
       - name: Build RustDesk Client
         run: |
           cd src
-          cargo build --release --features "hwcodec"
-        env:
-          RUST_BACKTRACE: full
+          cargo build --release --features "software_renderer"
 
-      # 6. 构建服务器（路径修正）
+      # 5. 构建服务器
       - name: Build RustDesk Server
         run: |
-          cd src/hbbs  # 修正路径
+          cd src/hbbs
           cargo build --release
           cd ../hbbr
           cargo build --release
 
-      # 7. 打包产物（路径修正）
+      # 6. 打包产物
       - name: Prepare artifacts
         run: |
           mkdir release
@@ -69,13 +63,14 @@ jobs:
           echo "Version: ${{ github.ref_name }}" > release/version.txt
           date >> release/version.txt
 
-      # 后续步骤保持不变...
+      # 7. 上传产物
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rustdesk-windows-${{ github.sha }}
           path: release/*
       
+      # 8. 发布到GitHub Release
       - name: Upload to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
